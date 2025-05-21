@@ -1,0 +1,5 @@
+{
+    "board": "arduino:avr:uno",
+    "sketch": "lightsensor\\lightsensor.ino",
+    "port": "COM3"
+}

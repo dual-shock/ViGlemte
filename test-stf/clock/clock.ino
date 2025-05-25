@@ -1,29 +1,26 @@
-//We always have to include the library
+
 #include "LedControl.h"
 
-/*
- Now we need a LedControl to work with.
- ***** These pin numbers will probably not work with your hardware *****
- pin 12 is connected to the DataIn 
- pin 11 is connected to the CLK 
- pin 10 is connected to LOAD 
- We have only a single MAX72XX.
- */
-LedControl lc=LedControl(12,11,10,1);
+
+LedControl lc = LedControl(2,4,3,1); // Data pin, Clock pin, CS pin, Number of devices
 
 /* we always wait a bit between updates of the display */
-unsigned long delaytime=500;
+unsigned long delaytime=1000;
 
 void setup() {
+   pinMode(2, OUTPUT); // Data pin
+   pinMode(3, OUTPUT); // Clock pin
+   pinMode(4, OUTPUT); // CS pin
   /*
    The MAX72XX is in power-saving mode on startup,
    we have to do a wakeup call
    */
   lc.shutdown(0,false);
   /* Set the brightness to a medium values */
-  lc.setIntensity(0,8);
+  lc.setIntensity(0,2);
   /* and clear the display */
   lc.clearDisplay(0);
+  Serial.begin(9600);
 }
 
 void printNumber(int v) {
@@ -58,5 +55,13 @@ void printNumber(int v) {
 }
 
 void loop() { 
-    printNumber(10);
+   int RowBits = B10000000;
+   for(int i=0; i<8; i++) {
+      lc.setRow(0,0,RowBits);
+      RowBits = RowBits >> 1;
+      delay(delaytime);
+      Serial.println(RowBits);
+      lc.clearDisplay(0);
+   }
+   
 }

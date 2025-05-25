@@ -1,46 +1,26 @@
-// CIRCUIT
-// 5v -> fotoresistor female
-// fotoresistor male -> 5k Ohm Male
-// 5k ohm Male -> A0
-// 5k Ohm female -> GND
+
+const int pResistor0 = A0; 
+//const int pResistor1 = A1; 
 
 
-//Constants
-const int pResistor = A0; // Photoresistor at Arduino analog pin A0
-
-//Variables
-int value;				  // Store value from photoresistor (0-1023)  
+int value0;	
+//int value1;				  
 
 void setup(){
   Serial.begin(9600);
-
- pinMode(pResistor, INPUT);// Set pResistor - A0 pin as an input (optional)
+  pinMode(pResistor0, INPUT);
+  //pinMode(pResistor1, INPUT);
 }
 
+
 void loop(){
-  value = analogRead(pResistor);
-  Serial.print("Photoresistor value: ");
-  Serial.print(value);
-  Serial.print("\t\t");
-  if (value < 10){
-    Serial.print("box is closed");
-  }
-  else{
-    Serial.print("box is open");
-  }
-  
+  value0 = analogRead(pResistor0);
+  //value1 = analogRead(pResistor1);
+  Serial.print("Photoresistor 0 value: ");
+  Serial.print(value0);
+  Serial.print("\t\t\t");
+  Serial.print("Photoresistor 1 value: ");
+  //Serial.print(value1);
   Serial.print("\n");
 }
 
-
-
-// 1   600 -> 250
-// 2   730 -> 270
-// 3   210 -> 30   REMOVED
-// 4   380 -> 100  REMOVED
-// 5   460 -> 80   REMOVED
-// 6   730 -> 250
-// 7   700 -> 290
-// 8   900 -> 600
-// 9   630 -> 140
-// 10  720 -> 360

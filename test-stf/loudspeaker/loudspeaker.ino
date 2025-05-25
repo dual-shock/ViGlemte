@@ -2,7 +2,7 @@
 #include "SoftwareSerial.h"
 #include "DFRobotDFPlayerMini.h"
 
-SoftwareSerial mySerial(10, 11); // RX, TX
+SoftwareSerial mySerial(6, 5); // RX, TX
 DFRobotDFPlayerMini myDFPlayer;
 
 void setup() {
@@ -15,7 +15,7 @@ void setup() {
     }
     
     Serial.println("DFPlayer Mini ready!");
-    myDFPlayer.volume(0);  // Set volume (0 to 30)
+    myDFPlayer.volume(25);  // Set volume (0 to 30)
     Serial.println("Playing File 001.mp3");
     myDFPlayer.play(1);      // Play first MP3 file
 }

@@ -1,8 +1,9 @@
-
-
 #include <Arduino.h>
+#include <analogmuxdemux.h> //interfacer med CD4051 Mux
+#include "SoftwareSerial.h" //setter opp seriell kommunikasjon med DFPlayer Mini
+#include "DFRobotDFPlayerMini.h" //interfacer med DFPlayer Mini
 
-class Luke {
+class Luker {
     // Representerer lokket på pilleboksen med en fotoresistor for å oppdage tilstanden
   private:
     const int lightSensorPin; 
@@ -11,7 +12,7 @@ class Luke {
 
   public:
     
-    Luke(int pin, int thresholdValue) : lightSensorPin(pin), threshold(thresholdValue), prevState(false) {
+    Luker(int pin, int thresholdValue) : lightSensorPin(pin), threshold(thresholdValue), prevState(false) {
       pinMode(lightSensorPin, INPUT);
     }
 
@@ -32,7 +33,6 @@ class Luke {
       return false; 
     }
 };
-
 
 class Alarm {
     // representerer "alarmen" med mulighet for 1 til 3 doser per dag satt opp 
@@ -146,8 +146,22 @@ class Kalender {
     }
 };
 
+// Pins
 
-Luke pilleboks(A0, 10); 
+#define amux_a_pin int 13
+#define amux_b_pin int 12
+#define amux_c_pin int 11
+
+#define amux_com_pin int 0 //analog pin A0
+
+#define switch_1_pin int 10 
+#define switch_2_pin int 9 
+
+#define DFPlayer_TX_pin int 8
+#define DFPlayer_RX_pin int 7
+
+
+Luker pilleboks(A0, 10); 
 Alarm alarm; 
 Kalender kalender(millis(), &alarm); 
 

@@ -1,36 +1,53 @@
 #include <Arduino.h>
 #include <analogmuxdemux.h> //interfacer med CD4051 Mux
 #include "SoftwareSerial.h" //setter opp seriell kommunikasjon med DFPlayer Mini
-#include "DFRobotDFPlayerMini.h" //interfacer med DFPlayer Mini
+#include <DFPlayerMini_Fast.h>
 
 class Luker {
-    // Representerer lokket på pilleboksen med en fotoresistor for å oppdage tilstanden
+
   private:
-    const int lightSensorPin; 
-    const int threshold;      // terskel for fotoresistor state
-    bool prevState;     
+    AnalogMux amux; 
+    int sensorValues[7]; // Current sensor readings
+    float avgValues[7] = {0}; // Moving average for each sensor
+    bool triggered[7] = {false}; // Track if opening has been detected for each sensor
+    const float alpha = 0.1; // Smoothing factor for moving average
 
   public:
     
-    Luker(int pin, int thresholdValue) : lightSensorPin(pin), threshold(thresholdValue), prevState(false) {
-      pinMode(lightSensorPin, INPUT);
-    }
+    Luker(int amux_a, int amux_b, int amux_c, int amux_com)
+      : amux(amux_a, amux_b, amux_c, amux_com) {}
 
-    // boolsk variabel, representerer om lokket er åpent eller lukket
-    bool Aapen() {
-      int sensorValue = analogRead(lightSensorPin);
-      return sensorValue > threshold; 
-    }
-
-    // registrer åpninger en og en 
-    bool RegistrerAapning() {
-      bool currState = Aapen();
-      if (currState && !prevState) { 
-        prevState = currState;
-        return true;
+    // Update and return the sensor values
+    int* sensors() {
+      for (int i = 0; i < 7; i++) {
+        sensorValues[i] = amux.AnalogRead(i);
       }
-      prevState = currState; 
-      return false; 
+      return sensorValues;
+    }
+
+    // Detects a drastic increase in light for any sensor (returns true if any triggered)
+    bool detectOpening(float threshold = 100.0) {
+      bool anyTriggered = false;
+      for (int i = 0; i < 7; i++) {
+        int current = amux.AnalogRead(i);
+        // Initialize moving average on first run
+        if (avgValues[i] == 0) avgValues[i] = current;
+
+        // Update moving average
+        avgValues[i] = alpha * current + (1 - alpha) * avgValues[i];
+
+        // Detect drastic increase
+        if (!triggered[i] && (current - avgValues[i]) > threshold) {
+          triggered[i] = true;
+          anyTriggered = true; // At least one sensor triggered
+        }
+
+        // Reset trigger when light goes back down (hysteresis)
+        if (triggered[i] && (current - avgValues[i]) < (threshold / 2)) {
+          triggered[i] = false;
+        }
+      }
+      return anyTriggered;
     }
 };
 
@@ -147,39 +164,113 @@ class Kalender {
 };
 
 // Pins
+#define amux_a_pin 13
+#define amux_b_pin 12
+#define amux_c_pin 11
 
-#define amux_a_pin int 13
-#define amux_b_pin int 12
-#define amux_c_pin int 11
+#define amux_com_pin 0 //analog pin A0
 
-#define amux_com_pin int 0 //analog pin A0
+#define switch_1_pin 10 
+#define switch_2_pin 9 
 
-#define switch_1_pin int 10 
-#define switch_2_pin int 9 
+#define volume_control_pin A5
 
-#define DFPlayer_TX_pin int 8
-#define DFPlayer_RX_pin int 7
+#define DFPlayer_TX_pin 3
+#define DFPlayer_RX_pin 2
 
 
-Luker pilleboks(A0, 10); 
-Alarm alarm; 
-Kalender kalender(millis(), &alarm); 
+// normal variables
+unsigned long tot_seconds, tot_minutes, tot_hours;
+int display_seconds, display_minutes, display_hours;
+
+SoftwareSerial DFPlayer_serial(DFPlayer_RX_pin, DFPlayer_TX_pin);
+DFPlayerMini_Fast DFPlayer;
+byte volume = 0;
+
+Luker luker(amux_a_pin, amux_b_pin, amux_c_pin, amux_com_pin);
+
+// prototype variables
+float time_multiplier = 1000.0;
+
+
+
+
+
+void convertTimes(unsigned long millisValue) {
+  tot_seconds = millisValue * time_multiplier / 1000; 
+  tot_minutes = tot_seconds / 60; 
+  tot_hours = tot_minutes / 60; 
+
+  display_hours = tot_hours % 24;
+  display_minutes = tot_minutes % 60;
+  display_seconds = tot_seconds % 60;
+}
+
+void updatePlayer(){
+  volume = map(analogRead(volume_control_pin), 0, 1023, 0, 30);
+  if(volume < 29){DFPlayer.volume(volume);}
+}
+
+
 
 void setup() {
   Serial.begin(9600);
+  DFPlayer_serial.begin(9600); 
+  DFPlayer.begin(DFPlayer_serial);
+  DFPlayer.loop(2); 
 }
 
+
 void loop() {
+  convertTimes(millis());
+  updatePlayer();
 
-  if (pilleboks.RegistrerAapning()) {
-    Serial.println("åpning registrert");
-    kalender.leggTilAapning(); 
-    kalender.kalkulerAlarmTid(); 
+  // Print volume with leading space if needed (always 2 chars)
+  Serial.print("volume: ");
+  if (volume < 10) Serial.print(" ");
+  Serial.print("[");
+  Serial.print(volume);
+  Serial.print("]");
+
+  Serial.print("  Clock: [");
+  if (display_hours < 10) Serial.print(" ");
+  Serial.print(display_hours);
+  Serial.print(":");
+  if (display_minutes < 10) Serial.print(" ");
+  Serial.print(display_minutes);
+  Serial.print(":");
+  if (display_seconds < 10) Serial.print(" ");
+  Serial.print(display_seconds);
+  Serial.print("]");
+
+  Serial.print("  Luker: [");
+  int* sensors = luker.sensors();
+  for (int i = 0; i < 7; i++) {
+    if (sensors[i] < 10) {
+      Serial.print("  ");
+    } else if (sensors[i] < 100) {
+      Serial.print(" ");
+    }
+    Serial.print(sensors[i]);
+    if (i < 6) Serial.print(",");
   }
-  
-  kalender.resetDag();
+  Serial.print("]");
 
-  kalender.sjekkEvent(alarm.getAlarmTid(0), []() { alarm.skruPaa(); });
+  // Print time since last registered opening
+  static unsigned long lastOpeningTime = 0;
+  static bool firstRun = true;
+  if (luker.detectOpening()) {
+    lastOpeningTime = millis();
+    firstRun = false;
+  }
+  Serial.print("  Time since last opening: ");
+  if (firstRun) {
+    Serial.print("N/A");
+  } else {
+    unsigned long elapsed = (millis() - lastOpeningTime) / 1000;
+    Serial.print(elapsed);
+    Serial.print("s");
+  }
 
-  delay(250); 
+  Serial.print("\r");
 }

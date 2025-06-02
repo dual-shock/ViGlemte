@@ -16,7 +16,7 @@ class Luker {
     int sensorValues[7]; // Current sensor readings
     float avgValues[7] = {0}; // Moving average for each sensor
     bool triggered[7] = {false}; // Track if opening has been detected for each sensor
-    const float alpha = 0.1; // Smoothing factor for moving average
+    const float alpha = 0.025; // Smoothing factor for moving average
 
   public:
     
@@ -253,7 +253,7 @@ const byte digitMask2[4] = {
 
 
 // prototype variables
-float time_multiplier = 2000.0;
+float time_multiplier = 150;
 
 //int start_time_in_secs = 32400;
 
@@ -375,24 +375,24 @@ void setup() {
 void loop() {
   DateTime now = rtc.now();
   if(print_realtime){
-  Serial.print(now.year(), DEC);
-  Serial.print("-");
-  Serial.print(now.month(), DEC);
-  Serial.print("-");
-  Serial.print(now.day(), DEC);
-  Serial.print("-");
-  Serial.print(now.hour(), DEC);
-  Serial.print("-");
-  Serial.print(now.minute(), DEC);
-  Serial.print("-");
-  Serial.print(now.second(), DEC);
-  Serial.print(" / ");
+    Serial.print(now.year(), DEC);
+    Serial.print("-");
+    Serial.print(now.month(), DEC);
+    Serial.print("-");
+    Serial.print(now.day(), DEC);
+    Serial.print("-");
+    Serial.print(now.hour(), DEC);
+    Serial.print("-");
+    Serial.print(now.minute(), DEC);
+    Serial.print("-");
+    Serial.print(now.second(), DEC);
+    Serial.print(" / ");
   }
 
 
   convertTimes(millis());
   updatePlayer();
- byte triggeredMask = luker.detectOpening();
+  byte triggeredMask = luker.detectOpening();
   // --- Switch event detection ---
   static int prev_switch_1 = -1;
   static int prev_switch_2 = -1;
@@ -484,7 +484,7 @@ void loop() {
         
   }
 
-  Serial.print("\r"); // Keeps the status line updating in place (if you want to keep it)
+  //Serial.print("\r"); // Keeps the status line updating in place (if you want to keep it)
 
 
 

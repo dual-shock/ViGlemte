@@ -31,6 +31,8 @@ class Luker {
       for (int i = 0; i < 7; i++) {
         int current = amux.AnalogRead(i);
         
+        if(i == 4){int current=amux.AnalogRead(7);}
+        
         if (avgValues[i] == 0) avgValues[i] = current;
         avgValues[i] = alpha * current + (1 - alpha) * avgValues[i];
         if (!triggered[i] && (current - avgValues[i]) > threshold) {
@@ -43,10 +45,6 @@ class Luker {
       }
       return triggeredMask;
     }
-
-    int readPotentiometer() { // ? Volume pin
-        return amux.AnalogRead(7); 
-    }
 };
 
 
@@ -57,6 +55,8 @@ class Luker {
 #define amux_c_pin 11
 
 #define amux_com_pin 0 //analog pin A0
+
+#define volume_pin 3 //analog pin A3
 
 #define switch_1_pin 7
 #define switch_2_pin 8
@@ -113,8 +113,8 @@ const byte digitMask2[4] = {
 
 //  * prototyping variables
 float time_multiplier = 150;
-bool    rint_realtime = false, print_openings = false, print_sensors = true, 
-        print_clock = false, print_volume = false; 
+bool    rint_realtime = false, print_openings = true, print_sensors = true, 
+        print_clock = false, print_volume = true; 
 int doses_per_day = 1;
 
     // * Demo Variables
@@ -184,7 +184,7 @@ void convertTimes(unsigned long millisValue) {
 }
 
 void updatePlayer(){
-  volume = map(luker.readPotentiometer(), 0, 1023, 0, 30);;
+  volume = volume = map(analogRead(volume_pin), 0, 1023, 0, 30);
   if(volume < 29){
     if (old_volume != volume) {
       DFPlayer.volume(volume);
@@ -232,7 +232,6 @@ void loop() {
     int switch_1 = digitalRead(switch_1_pin);
     int switch_2 = digitalRead(switch_2_pin);
 
-
     if (prev_switch_1 == -1) prev_switch_1 = switch_1; 
     if (prev_switch_2 == -1) prev_switch_2 = switch_2;
     if (switch_1 != prev_switch_1) {
@@ -244,6 +243,7 @@ void loop() {
             update_player = false;
         }
         else{
+            volume = map(analogRead(volume_pin), 0, 1023, 0, 30);
             update_player = true;
             DFPlayer.volume(volume);
         }
@@ -254,6 +254,51 @@ void loop() {
         Serial.println(switch_2 == HIGH ? "ON" : "OFF");
         prev_switch_2 = switch_2;
     }
+
+
+    // * Sensor printing
+    if(print_sensors){
+      Serial.print("  Luker: [");
+      int* sensors = luker.sensors();
+      for (int i = 0; i < 7; i++) {
+        if (sensors[i] < 10) {
+          Serial.print("  ");
+        } else if (sensors[i] < 100) {
+          Serial.print(" ");
+        }
+        Serial.print(sensors[i]);
+        if (i < 6) Serial.print(",");
+      }
+      Serial.print("]");
+          
+    }
+    if (print_openings) {
+      for (int i = 0; i < 7; i++) {
+        if (triggeredMask & (1 << i)) {
+          // Calculate weekday (0=Monday, 6=Sunday)
+          int weekday = tot_days % 7;
+          // Save opening time in seconds since midnight
+          unsigned long opening_time = display_hours * 3600 + display_minutes * 60 + display_seconds;
+
+          Serial.print("\033[2K\r");
+          Serial.print("Sensor ");
+          Serial.print(i);
+          Serial.print(" detected an opening at time [");
+          if (display_hours < 10) Serial.print("0");
+          Serial.print(display_hours);
+          Serial.print(":");
+          if (display_minutes < 10) Serial.print("0");
+          Serial.print(display_minutes);
+          Serial.print(":");
+          if (display_seconds < 10) Serial.print("0");
+          Serial.print(display_seconds);
+          Serial.println("]");
+          break;
+        }
+      }
+    }
+
+
 
     // * demo logic
     if (!day1_opened && tot_days == 0) {
@@ -359,6 +404,7 @@ void loop() {
             day3_opened = true;
         }
     }
+    Serial.print("\r");
 }
 
 

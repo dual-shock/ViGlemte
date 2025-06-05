@@ -253,7 +253,7 @@ const byte digitMask2[4] = {
 
 
 // prototype variables
-float time_multiplier = 150;
+float time_multiplier = 2500;
 
 //int start_time_in_secs = 32400;
 
@@ -322,13 +322,13 @@ void convertTimes(unsigned long millisValue) {
   tot_seconds = rtc_start_time_in_secs + (millisValue * time_multiplier / 1000); // add start time in millis to the total seconds
   tot_minutes = tot_seconds / 60; 
   tot_hours = tot_minutes / 60; 
-  tot_days = tot_hours / 24; // calculate the number of days
+  tot_days = tot_hours / 24; 
   display_hours = tot_hours % 24;
   display_minutes = tot_minutes % 60;
   display_seconds = tot_seconds % 60;
 }
 
-int old_volume = 0; // for volume control
+int old_volume = 0; 
 
 void updatePlayer(){
   //volume = map(analogRead(volume_control_pin), 0, 1023, 0, 30);
@@ -345,7 +345,6 @@ void updatePlayer(){
 }
 
 void refreshDisplay() {
-  // hours and minutes should be in globals that you update once/60s
   displayTime(display_hours, display_minutes);
 }
 
@@ -393,12 +392,12 @@ void loop() {
   convertTimes(millis());
   updatePlayer();
   byte triggeredMask = luker.detectOpening();
-  // --- Switch event detection ---
+
   static int prev_switch_1 = -1;
   static int prev_switch_2 = -1;
   int switch_1 = digitalRead(switch_1_pin);
   int switch_2 = digitalRead(switch_2_pin);
-  if (prev_switch_1 == -1) prev_switch_1 = switch_1; // Initialize on first run
+  if (prev_switch_1 == -1) prev_switch_1 = switch_1; 
   if (prev_switch_2 == -1) prev_switch_2 = switch_2;
   
   if (switch_1 != prev_switch_1) {
@@ -573,7 +572,7 @@ if (day2_opened && !day3_opened) {
         Serial.print(display_hours);
         Serial.print(":");
         Serial.print(display_minutes);
-        DFPlayer.play(2);
+        DFPlayer.loop(2);
         alarm_playing = true;
     }
 

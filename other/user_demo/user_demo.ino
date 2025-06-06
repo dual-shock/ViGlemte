@@ -6,6 +6,10 @@
 #include <Wire.h> 
 #include "RTClib.h"
 
+//sensor 0 (sunday)
+// and 6 (thursday) 
+// are accurate, but lower than rest, making them not always register
+
 
 // * classes
 class Luker {
@@ -31,7 +35,7 @@ class Luker {
       for (int i = 0; i < 7; i++) {
         int current = amux.AnalogRead(i);
         
-        if(i == 4){int current=amux.AnalogRead(7);}
+        //if(i == 4){int current=amux.AnalogRead(7);}
         
         if (avgValues[i] == 0) avgValues[i] = current;
         avgValues[i] = alpha * current + (1 - alpha) * avgValues[i];
@@ -54,9 +58,9 @@ class Luker {
 #define amux_b_pin 10
 #define amux_c_pin 11
 
-#define amux_com_pin 0 //analog pin A0
+#define amux_com_pin A0 //analog pin A0
 
-#define volume_pin 3 //analog pin A3
+#define volume_pin A3 //analog pin A3
 
 #define switch_1_pin 7
 #define switch_2_pin 8
@@ -65,12 +69,31 @@ class Luker {
 #define dataPin 4
 #define clockPin 2
 
+#define ledDataPin A1
+#define ledClockPin 6
+#define ledLatchPin 5
+
 #define DFPlayer_TX_pin 12
 #define DFPlayer_RX_pin 13
 
 
 
+
+
 //  * normal variables
+// ...existing code...
+volatile int ledWave_pos = 0;
+volatile int ledWave_dir = 1;
+volatile bool ledWave_active = false;
+const int ledWave_steps = 8;
+const unsigned long ledWave_interval = 100; // ms between steps
+
+volatile unsigned long ledWave_lastUpdate = 0; // for timing inside ISR
+const int ledWave_start = 1; // Q1
+const int ledWave_end = 7;   // Q7
+
+
+
 RTC_DS3231 rtc;
 unsigned long rtc_start_time_in_secs = 0;
 
@@ -188,6 +211,7 @@ void updatePlayer(){
   if(volume < 29){
     if (old_volume != volume) {
       DFPlayer.volume(volume);
+      Serial.print("\033[2K\r");
       Serial.print("Volume set to: ");
       Serial.println(volume);
       old_volume = volume;
@@ -199,6 +223,44 @@ void refreshDisplay() {
   displayTime(display_hours, display_minutes);
 }
 
+void updateLEDs(byte state) {
+  digitalWrite(ledLatchPin, LOW);
+  shiftOut(ledDataPin, ledClockPin, MSBFIRST, state);
+  digitalWrite(ledLatchPin, HIGH);
+}
+
+void ledWaveTask() {
+  if (!ledWave_active) return;
+  unsigned long now = millis();
+  if (now - ledWave_lastUpdate >= ledWave_interval) {
+    updateLEDs(1 << ledWave_pos);
+
+    ledWave_pos += ledWave_dir;
+    if (ledWave_pos > ledWave_end) {
+      ledWave_pos = ledWave_end - 1;
+      ledWave_dir = -1;
+    } else if (ledWave_pos < ledWave_start) {
+      ledWave_pos = ledWave_start + 1;
+      ledWave_dir = 1;
+    }
+    ledWave_lastUpdate = now;
+  }
+}
+void startLedWave() {
+  ledWave_active = true;
+  ledWave_pos = ledWave_start;
+  ledWave_dir = 1;
+  ledWave_lastUpdate = millis();
+}
+void stopLedWave() {
+  ledWave_active = false;
+  updateLEDs(0);
+}
+
+
+
+
+
 void setup() {
   Serial.begin(9600);
   DFPlayer_serial.begin(9600); 
@@ -206,6 +268,13 @@ void setup() {
   pinMode(latchPin, OUTPUT);
   pinMode(dataPin , OUTPUT);
   pinMode(clockPin, OUTPUT);
+  pinMode(ledClockPin, OUTPUT);
+  pinMode(ledDataPin, OUTPUT);
+  pinMode(ledLatchPin, OUTPUT);
+  updateLEDs(B11111110);
+
+  DFPlayer.loop(2);
+
   Timer1.initialize(2000);
   Timer1.attachInterrupt(refreshDisplay);
   Wire.begin();
@@ -215,9 +284,14 @@ void setup() {
   }
   DateTime now = rtc.now();
   rtc_start_time_in_secs = now.hour() * 3600UL + now.minute() * 60UL + now.second();
+  startLedWave();
 }
 
+
+
 void loop() {
+    ledWaveTask();
+
     // * looping values
     DateTime now = rtc.now();
     convertTimes(millis());
@@ -404,6 +478,8 @@ void loop() {
             day3_opened = true;
         }
     }
+
+
     Serial.print("\r");
 }
 

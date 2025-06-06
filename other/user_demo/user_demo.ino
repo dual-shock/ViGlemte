@@ -8,7 +8,7 @@
 
 //sensor 0 (sunday)
 // and 6 (thursday) 
-// are accurate, but lower than rest, making them not always register
+// TODO are accurate, but lower than rest, making them not always register
 
 
 // * classes
@@ -34,9 +34,6 @@ class Luker {
       byte triggeredMask = 0;
       for (int i = 0; i < 7; i++) {
         int current = amux.AnalogRead(i);
-        
-        //if(i == 4){int current=amux.AnalogRead(7);}
-        
         if (avgValues[i] == 0) avgValues[i] = current;
         avgValues[i] = alpha * current + (1 - alpha) * avgValues[i];
         if (!triggered[i] && (current - avgValues[i]) > threshold) {
@@ -132,12 +129,15 @@ const byte digitMask2[4] = {
   0b11111011  // digit 4 ON (bit 2 = 0)
 };
 
+bool update_player = true; 
+
+
 
 
 //  * prototyping variables
-float time_multiplier = 150;
+float time_multiplier = 650;
 bool    rint_realtime = false, print_openings = true, print_sensors = true, 
-        print_clock = false, print_volume = true; 
+        print_clock = false, print_volume = true, terminal_mode = true; 
 int doses_per_day = 1;
 
     // * Demo Variables
@@ -160,7 +160,7 @@ bool day3_play_alarm = false;
 int mid_hour = 0;
 int mid_min = 0;
 
-bool update_player = true; 
+
 
 
 
@@ -211,7 +211,7 @@ void updatePlayer(){
   if(volume < 29){
     if (old_volume != volume) {
       DFPlayer.volume(volume);
-      Serial.print("\033[2K\r");
+      if(terminal_mode){Serial.print("\033[2K\r");}
       Serial.print("Volume set to: ");
       Serial.println(volume);
       old_volume = volume;
@@ -230,7 +230,7 @@ void updateLEDs(byte state) {
 }
 
 void ledWaveTask() {
-  if (!ledWave_active) return;
+  if (!ledWave_active){ return; updateLEDs(0); }
   unsigned long now = millis();
   if (now - ledWave_lastUpdate >= ledWave_interval) {
     updateLEDs(1 << ledWave_pos);
@@ -258,7 +258,11 @@ void stopLedWave() {
 }
 
 
+//TODO Audio playing at alarm when sound switch is off 
+//TODO Audio playing at start when sound switch is off 
+  //TODO it does this at a higher than usual 
 
+  //TODO 
 
 
 void setup() {
@@ -272,9 +276,6 @@ void setup() {
   pinMode(ledDataPin, OUTPUT);
   pinMode(ledLatchPin, OUTPUT);
   updateLEDs(B11111110);
-
-  DFPlayer.loop(2);
-
   Timer1.initialize(2000);
   Timer1.attachInterrupt(refreshDisplay);
   Wire.begin();
@@ -284,7 +285,20 @@ void setup() {
   }
   DateTime now = rtc.now();
   rtc_start_time_in_secs = now.hour() * 3600UL + now.minute() * 60UL + now.second();
-  startLedWave();
+  stopLedWave();
+
+  int switch_1 = digitalRead(switch_1_pin);
+  int switch_2 = digitalRead(switch_2_pin);
+
+  if(switch_1 == LOW){
+      DFPlayer.volume(0);
+      update_player = false;
+  }
+  else{
+      volume = map(analogRead(volume_pin), 0, 1023, 0, 30);
+      update_player = true;
+      DFPlayer.volume(volume);
+  }
 }
 
 
@@ -309,6 +323,7 @@ void loop() {
     if (prev_switch_1 == -1) prev_switch_1 = switch_1; 
     if (prev_switch_2 == -1) prev_switch_2 = switch_2;
     if (switch_1 != prev_switch_1) {
+        if(terminal_mode){Serial.print("\033[2K\r");}
         Serial.print("Switch 1 (sound) toggled: ");
         Serial.println(switch_1 == HIGH ? "ON" : "OFF");
         prev_switch_1 = switch_1;
@@ -324,9 +339,17 @@ void loop() {
 
     }
     if (switch_2 != prev_switch_2) {
+      if(terminal_mode){Serial.print("\033[2K\r");}
         Serial.print("Switch 2 (lights) (unused) toggled: ");
         Serial.println(switch_2 == HIGH ? "ON" : "OFF");
         prev_switch_2 = switch_2;
+        if(switch_2 == LOW){
+            ledWave_active = false;            
+        }
+        else{
+            ledWave_active = true;
+
+        }
     }
 
 
@@ -354,7 +377,7 @@ void loop() {
           // Save opening time in seconds since midnight
           unsigned long opening_time = display_hours * 3600 + display_minutes * 60 + display_seconds;
 
-          Serial.print("\033[2K\r");
+          if(terminal_mode){Serial.print("\033[2K\r");}
           Serial.print("Sensor ");
           Serial.print(i);
           Serial.print(" detected an opening at time [");
@@ -376,11 +399,12 @@ void loop() {
 
     // * demo logic
     if (!day1_opened && tot_days == 0) {
-        if (triggeredMask & (1 << 5)) {
+        if (triggeredMask & (1 << 1)) {
             day1_opened = true;
             day1_open_hour = display_hours;
             day1_open_minutes = display_minutes;
-            Serial.print("Day 1 (Sensor 5) opened at [");
+            if(terminal_mode){Serial.print("\033[2K\r");}
+            Serial.print("Day 1 (Sensor 1) opened at [");
             Serial.print(display_hours);
             Serial.print(":");
             Serial.print(display_minutes);
@@ -401,6 +425,7 @@ void loop() {
             }
         }
         if (day2_play_alarm && !alarm_playing && tot_days == 1) {
+            if(terminal_mode){Serial.print("\033[2K\r");}
             Serial.print("day 2 alarm playing! at: [");
             Serial.print(display_hours);
             Serial.print(":");
@@ -409,12 +434,15 @@ void loop() {
             Serial.print(display_seconds);
             Serial.print("]");
             Serial.println("  waiting for day 2 box lid (sensor 3) to open.");
+            startLedWave();
             DFPlayer.loop(2);
             alarm_playing = true;
         }
-        if ((triggeredMask & (1 << 3)) && alarm_playing) {
+        if ((triggeredMask & (1 << 2)) && alarm_playing) {
             DFPlayer.stop();
-            Serial.print("day 2 sensor (3) detected opening, alarm stopped! at: [");
+            stopLedWave();
+            if(terminal_mode){Serial.print("\033[2K\r");}
+            Serial.print("day 2 sensor (2) detected opening, alarm stopped! at: [");
             Serial.print(display_hours);
             Serial.print(":");
             Serial.print(display_minutes);
@@ -453,6 +481,7 @@ void loop() {
             }
         }
         if (day3_play_alarm && !alarm_playing && tot_days == 2) {
+            if(terminal_mode){Serial.print("\033[2K\r");}
             Serial.print("day 3 alarm playing! at: [");
             Serial.print(display_hours);
             Serial.print(":");
@@ -461,12 +490,15 @@ void loop() {
             Serial.print(display_seconds);
             Serial.print("]");
             Serial.println("  waiting for day 3 box lid (sensor 2) to open.");
+            startLedWave();
             DFPlayer.loop(2);
             alarm_playing = true;
         }
-        if ((triggeredMask & (1 << 2)) && alarm_playing) {
+        if ((triggeredMask & (1 << 5)) && alarm_playing) {
             DFPlayer.stop();
-            Serial.print("day 3 sensor (2) detected opening, alarm stopped! at: [");
+            stopLedWave();
+            if(terminal_mode){Serial.print("\033[2K\r");}
+            Serial.print("day 3 sensor (5) detected opening, alarm stopped! at: [");
             Serial.print(display_hours);
             Serial.print(":");
             Serial.print(display_minutes);
@@ -480,7 +512,7 @@ void loop() {
     }
 
 
-    Serial.print("\r");
+    if(terminal_mode){Serial.print("\r");}
 }
 
 

@@ -18,7 +18,7 @@ class Luker {
     int sensorValues[7]; 
     float avgValues[7] = {0}; 
     bool triggered[7] = {false}; 
-    const float alpha = 0.025; 
+    const float alpha = 0.5; 
 
   public:
     Luker(int amux_a, int amux_b, int amux_c, int amux_com)
@@ -130,12 +130,13 @@ const byte digitMask2[4] = {
 };
 
 bool update_player = true; 
+bool leds_on = true; 
 
 
 
 
 //  * prototyping variables
-float time_multiplier = 650;
+float time_multiplier = 1.0;
 bool    rint_realtime = false, print_openings = true, print_sensors = true, 
         print_clock = false, print_volume = true, terminal_mode = true; 
 int doses_per_day = 1;
@@ -290,21 +291,26 @@ void setup() {
   int switch_1 = digitalRead(switch_1_pin);
   int switch_2 = digitalRead(switch_2_pin);
 
-  if(switch_1 == LOW){
+  if(digitalRead(switch_1_pin) == LOW){
       DFPlayer.volume(0);
       update_player = false;
-  }
-  else{
+  }else{
       volume = map(analogRead(volume_pin), 0, 1023, 0, 30);
       update_player = true;
-      DFPlayer.volume(volume);
-  }
+      DFPlayer.volume(volume);}
+
+  if(digitalRead(switch_2_pin) == LOW){
+      updateLEDs(B00000000);
+      leds_on = false;  
+  }else{
+      leds_on = true; }
+
 }
 
 
 
 void loop() {
-    ledWaveTask();
+    
 
     // * looping values
     DateTime now = rtc.now();
@@ -313,6 +319,7 @@ void loop() {
     byte triggeredMask = luker.detectOpening();
 
     if(update_player){updatePlayer();}
+    if(leds_on){ledWaveTask();}
 
     // * swtich detections
     static int prev_switch_1 = -1;
@@ -344,10 +351,11 @@ void loop() {
         Serial.println(switch_2 == HIGH ? "ON" : "OFF");
         prev_switch_2 = switch_2;
         if(switch_2 == LOW){
-            ledWave_active = false;            
+            updateLEDs(B00000000);
+            leds_on = false;           
         }
         else{
-            ledWave_active = true;
+            leds_on = true; 
 
         }
     }
@@ -435,11 +443,14 @@ void loop() {
             Serial.print("]");
             Serial.println("  waiting for day 2 box lid (sensor 3) to open.");
             startLedWave();
-            DFPlayer.loop(2);
+            DFPlayer.loop(3);
             alarm_playing = true;
         }
         if ((triggeredMask & (1 << 2)) && alarm_playing) {
             DFPlayer.stop();
+            delay(200);
+            DFPlayer.play(4);
+
             stopLedWave();
             if(terminal_mode){Serial.print("\033[2K\r");}
             Serial.print("day 2 sensor (2) detected opening, alarm stopped! at: [");
@@ -491,11 +502,13 @@ void loop() {
             Serial.print("]");
             Serial.println("  waiting for day 3 box lid (sensor 2) to open.");
             startLedWave();
-            DFPlayer.loop(2);
+            DFPlayer.loop(3);
             alarm_playing = true;
         }
         if ((triggeredMask & (1 << 5)) && alarm_playing) {
             DFPlayer.stop();
+            delay(200);
+            DFPlayer.play(4);
             stopLedWave();
             if(terminal_mode){Serial.print("\033[2K\r");}
             Serial.print("day 3 sensor (5) detected opening, alarm stopped! at: [");

@@ -22,7 +22,7 @@
 
 
 
-
+// TODO Comment out whole code 
 
 
 // TODO sensor 0 and 6 are slightly lower on average than the rest,
@@ -39,9 +39,9 @@
 #define amux_b_pin 10
 #define amux_c_pin 11
 
-#define amux_com_pin A0 //analog pin A0
+#define amux_com_pin A0 
 
-#define volume_pin A3 //analog pin A3
+#define volume_pin A3 
 
 #define switch_1_pin 7
 #define switch_2_pin 8
@@ -70,7 +70,7 @@ class Luker {
     const float alpha = 0.5; 
 
   public:
-    int sensors_indexed_by_day[7] = {3, 4, 1, 0, 5, 6, 7};
+    int sensors_indexed_by_day[7] = {3, 4, 1, 0, 5, 6, 2};
     // ? generally, this program prefers using the RTCLibs DateTime class
     // ? and its subsequent .dayOfTheWeek() method, the respective sensors
     // ? are therefore indexed using sensors_indexed_by_day[DateTime.dayOfTheWeek()]
@@ -166,6 +166,36 @@ class AllOpenings {
       }
     }
 
+  void calculateAlarmTimes(DateTime* alarm_times, DateTime now) {
+      //TODO add weight to more recent doses
+
+      //TODO add a check to see if a dose is very irregular, 
+      //TODO    and if so done use it in calculation
+
+
+      // calculates the average alarm times on the global alarm_times array 
+      for (int d = 0; d < dose_count; d++) { // for each dose of the day 
+          long total_seconds = 0; // a total seconds to make an average of 
+          int num = 0; // a total number to make an average of 
+          for (int i = 0; i < count; i++) {
+              int index = (head + i) % max_openings; // index in queue 
+              if ((i % dose_count) == d && openings[index].valid) { // if it is the N'th dose corresponding to the N'th dose of the day 
+                  DateTime time_of_dose = openings[index].time;
+                  long seconds = time_of_dose.hour() * 3600L + time_of_dose.minute() * 60L + time_of_dose.second();
+                  total_seconds += seconds; // add time of dose to average
+                  num++;
+              }
+          }
+          long avg_seconds = total_seconds / num;
+          int hour = avg_seconds / 3600;
+          int minute = (avg_seconds % 3600) / 60;
+          int second = avg_seconds % 60;  // calculates an average 
+          
+          // adds an alarm time for the new (now) day for each dose of that day 
+          alarm_times[d] = DateTime(now.year(), now.month(), now.day(), hour, minute, second);
+      }
+
+  }
 };
 
 
@@ -174,6 +204,7 @@ class AllOpenings {
 // * // * variables
 
 // * lids / sensor openings
+int dose_count_global = 0;
 AllOpenings all_openings;
 Luker luker(amux_a_pin, amux_b_pin, amux_c_pin, amux_com_pin);
 const int max_doses_per_day = 3; // maximum amount of doses per day, can be changed later
@@ -264,7 +295,7 @@ void updateClock() {
 
 // * DFPlayer and loudspeaker
 void updatePlayer(){
-  volume = volume = map(analogRead(volume_pin), 0, 1023, 0, 30);
+  volume = map(analogRead(volume_pin), 0, 1023, 0, 30);
   if(volume < 29){
     if (old_volume != volume) {
       DFPlayer.volume(volume);
@@ -369,10 +400,10 @@ void setup() {
 
   
 
-  bool turn_on_condition = true;
-  while(turn_on_condition){ //TODO make this condition tied to a button or something
-    // wait until condition met, i.e box "turned on"
-  } 
+  bool turn_on_condition = true; // TODO add a turn on condition like pushing a button
+  
+
+  while(!turn_on_condition){ break; } 
   
   bool first_day_over = false;
   int day_to_check = start_time.dayOfTheWeek(); // the config day to check, indexed by sensor
@@ -386,7 +417,7 @@ void setup() {
   int dose_count = 0; 
   while(!first_day_over){ // while we're on the first day, only runs once as its in setup()
     
-    //TODO add a check to see if the openings are attached to ALL openings, 
+    //TODO add a check to see if the openings are attached to ALL opening, i.e a refill is happening 
     //TODO if the sensor after the opening of the respecive day is opened within 
     //TODO 5 minutes of the first opening, disregard that first opening
     
@@ -423,6 +454,7 @@ void setup() {
   for(int i = 0; i < dose_count; i++){
     all_openings.save(first_day_openings[i]); // save the first day openings to the all openings class
   }
+  dose_count_global = dose_count; // set the global dose count to the first day openings count
 
 
 }
@@ -431,24 +463,30 @@ void setup() {
 //? with an array of the first openings, matching the count of dose_count
 
 
+
+// * // * Main loop 
+DateTime old_day = now; 
+int current_dose_index = 0;
+bool alarm_playing = false;
+DateTime alarm_times[max_doses_per_day];
+
+
+
 void loop() {
+    //TODO add a check to see if the openings are attached to ALL opening, i.e a refill is happening 
+    //TODO if the sensor after the opening of the respecive day is opened within 
+    //TODO 5 minutes of the first opening, disregard that first opening
     
 
     // * looping values
     now = rtc.now();
+    byte opening_byte = luker.openingsByte();
 
-    
-    byte triggeredMask = luker.openingsByte();
-
-    if(update_player){updatePlayer();}
-    if(leds_on){ledWaveTask();}
-
-    // * swtich detections
+    // * swtich actions
     static int prev_switch_1 = -1;
     static int prev_switch_2 = -1;
     int switch_1 = digitalRead(switch_1_pin);
     int switch_2 = digitalRead(switch_2_pin);
-
     if (prev_switch_1 == -1) prev_switch_1 = switch_1; 
     if (prev_switch_2 == -1) prev_switch_2 = switch_2;
     if (switch_1 != prev_switch_1) {
@@ -475,6 +513,58 @@ void loop() {
 
         }
     }
+
+    if(update_player){updatePlayer();}
+    if(leds_on){ledWaveTask();}
+
+
+
+
+    if(old_day.dayOfTheWeek() != now.dayOfTheWeek()){
+      // a day has passed, so we can save the openings of the previous day
+
+      //TODO make sure dose_count of doses has been passed for the day, no more no less
+      //TODO if less than dose_count, add non valid openings to the all_openings
+      
+
+      // calculateAlarmTimes adds times for the new.dayOfTheWeek() to the alarm_times array
+      // so running it once now will be enough
+      all_openings.calculateAlarmTimes(alarm_times, now);
+       // save the last opening of the previous day
+      old_day = now; 
+      current_dose_index = 0;
+    }
+
+    if (current_dose_index < dose_count_global) {
+        DateTime alarm_time = alarm_times[current_dose_index];
+
+        // If it's time for the next dose and alarm isn't playing, start alarm
+        if (!alarm_playing && now >= alarm_time) {
+            startLedWave();
+            DFPlayer.loop(3); // Play alarm sound (adjust track number as needed)
+            alarm_playing = true;
+        }
+
+        // If alarm is playing, check for opening
+        if (alarm_playing) {
+            if (luker.listenForOpening(opening_byte, now.dayOfTheWeek())) {
+                stopLedWave();
+                DFPlayer.stop();
+                alarm_playing = false;
+                delay(200);
+                DFPlayer.play(4);
+                byte led_mask = 1 << now.dayOfTheWeek();
+                for (int i = 0; i < 3; i++) {
+                    updateLEDs(led_mask);
+                    delay(200);
+                    updateLEDs(0);
+                    delay(200);
+                }
+                current_dose_index++; // Move to next dose/alarm for today
+            }
+        }
+    }
+
 
 
 }

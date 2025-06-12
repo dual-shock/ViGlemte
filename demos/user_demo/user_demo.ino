@@ -78,7 +78,6 @@ class Luker {
 
 
 //  * normal variables
-// ...existing code...
 volatile int ledWave_pos = 0;
 volatile int ledWave_dir = 1;
 volatile bool ledWave_active = false;
